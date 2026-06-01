@@ -1,0 +1,43 @@
+version: '3.8'
+
+# Services are containers that will run together
+services:
+  # FastAPI Application Service
+  api:
+    # Build from Dockerfile in current directory
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Container name for easy reference
+    container_name: nexauth-api
+    
+    # Port mapping: HOST_PORT:CONTAINER_PORT
+    # Access app via http://localhost:8000 from your machine
+    ports:
+      - "8000:8000"
+    
+    # Environment variables passed to the container
+    # These override .env file or can be loaded from .env
+    env_file:
+      - .env
+    
+    # Volumes mount directories from host to container for development
+    # This allows code changes without rebuilding
+    volumes:
+      # Mount app directory for hot-reload during development
+      - ./app:/app/app
+      # Mount migrations directory
+      - ./migrations:/app/migrations
+    
+    # Network: containers on same network can communicate by service name
+    networks:
+      - nexauth-network
+    
+    # Restart policy: automatically restart if container crashes
+    restart: unless-stopped
+
+# Named networks for container communication
+networks:
+  nexauth-network:
+    driver: bridge
