@@ -7,11 +7,12 @@ WORKDIR /app
 
 # Install system dependencies required for building Python packages
 # - build-essential: compiler tools
-# - libpq-dev: for PostgreSQL drivers (if needed in future)
 # - unixodbc-dev: required for pyodbc to connect to MSSQL
+# - gnupg: for package verification
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    gnupg \
     unixodbc-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,11 +35,19 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
 # Install runtime dependencies only (smaller than builder)
-# Including unixodbc for pyodbc MSSQL driver support
+# Including Microsoft ODBC drivers for SQL Server
 RUN apt-get update && apt-get install -y \
     curl \
     unixodbc \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Add Microsoft's package repository and install ODBC driver 18
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg && \
+    curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y msodbcsql18 && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
