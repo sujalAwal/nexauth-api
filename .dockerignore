@@ -1,0 +1,74 @@
+# Version Control
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+.project
+.pydevproject
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Testing
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+.dmypy.json
+
+# Build artifacts
+*.zip
+*.tar.gz
+
+# Node modules (if using any frontend tools)
+node_modules/
+
+# Docker files (don't copy docker files into image)
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Alembic versions (will be created in container)
+migrations/versions/
+
+# Logs
+*.log
+logs/
