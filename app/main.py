@@ -14,7 +14,8 @@ async def lifespan(app: FastAPI):
     """Manage app startup and shutdown"""
     global heartbeat_task
     # Startup
-    heartbeat_task = asyncio.create_task(db_heartbeat())
+    if(settings.DB_CONNECTIVITY == "MSSQL"):
+     heartbeat_task = asyncio.create_task(db_heartbeat())
     yield
     # Shutdown
     if heartbeat_task:

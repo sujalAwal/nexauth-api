@@ -1,43 +1,63 @@
-version: '3.8'
-
-# Services are containers that will run together
 services:
-  # FastAPI Application Service
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: chatbot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-chatbot_db}
+      POSTGRES_USER: ${DB_USER:-chatbot_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-chatbot_user} -d ${DB_NAME:-chatbot_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - chatbot-network
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: chatbot-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispass}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - chatbot-network
+
+  # FastAPI Application
   api:
-    # Build from Dockerfile in current directory
     build:
       context: .
       dockerfile: Dockerfile
-    
-    # Container name for easy reference
-    container_name: nexauth-api
-    
-    # Port mapping: HOST_PORT:CONTAINER_PORT
-    # Access app via http://localhost:8000 from your machine
-    ports:
-      - "8000:8000"
-    
-    # Environment variables passed to the container
-    # These override .env file or can be loaded from .env
-    env_file:
-      - .env
-    
-    # Volumes mount directories from host to container for development
-    # This allows code changes without rebuilding
-    volumes:
-      # Mount app directory for hot-reload during development
-      - ./app:/app/app
-      # Mount migrations directory
-      - ./migrations:/app/migrations
-    
-    # Network: containers on same network can communicate by service name
-    networks:
-      - nexauth-network
-    
-    # Restart policy: automatically restart if container crashes
+    container_name: chatbot-api
     restart: unless-stopped
+    ports:
+      - "8010:8010"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chatbot-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload
 
-# Named networks for container communication
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
 networks:
-  nexauth-network:
+  chatbot-network:
     driver: bridge

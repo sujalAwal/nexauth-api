@@ -1,31 +1,45 @@
-# app/modules/user/model.py
-from sqlalchemy import Column, String, DateTime, Boolean, text
-from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
+from app.utils.models.mixin.audit import AuditMixin
+from app.utils.models.mixin.soft_delete import SoftDeleteMixin
 
-class User(Base):
-    __tablename__ = 'users'
-    
-    id = Column(
-        UNIQUEIDENTIFIER, 
-        primary_key=True, 
-        server_default=text('NEWID()')
+
+class User(Base, SoftDeleteMixin, AuditMixin):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
-    name = Column(String(50), nullable=False)
-    first_name = Column(String(50), nullable=False)
-    middle_name = Column(String(50), nullable=True)
-    last_name = Column(String(50), nullable=False)
-    email = Column(String(100), nullable=False, unique=True)
-    password = Column(String(255), nullable=False)
-    phone_number = Column(String(20), nullable=True)
-    country_code = Column(String(5), nullable=False)
-    state = Column(String(5), nullable=True)
-    city = Column(String(100), nullable=True)
-    municipality = Column(String(100), nullable=True)
-    address = Column(String(255), nullable=True)
-    postal_code = Column(String(10), nullable=True)
-    is_active = Column(Boolean, nullable=False, server_default=text('0'))
-    created_at = Column(DateTime, nullable=False, server_default=text('GETDATE()'))
-    updated_at = Column(DateTime, nullable=False, server_default=text('GETDATE()'), onupdate=text('GETDATE()'))
-    deleted_at = Column(DateTime, nullable=True)
-    email_verified_at = Column(DateTime, nullable=True)
+    name: Mapped[str] = mapped_column(String(50), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    middle_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    last_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    email: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country_code: Mapped[str] = mapped_column(String(5), nullable=False)
+    state: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    municipality: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    postal_code: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

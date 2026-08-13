@@ -1,38 +1,52 @@
-# app/modules/province/model.py
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, text, ForeignKey, Index
-from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER, BIT
-from sqlalchemy.orm import relationship
+import uuid
+from datetime import datetime, timezone
+from typing import Optional, List, TYPE_CHECKING
+from sqlalchemy import String, Integer, DateTime, Boolean, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+from app.utils.models.mixin.soft_delete import SoftDeleteMixin
 
-class Province(Base):
-    __tablename__ = 'provinces'
-    
-    id = Column(
-        UNIQUEIDENTIFIER, 
-        primary_key=True, 
-        server_default=text('NEWID()')
+if TYPE_CHECKING:
+    from .countries import Country
+    from .districts import District
+
+
+class Province(Base, SoftDeleteMixin):
+    __tablename__ = "provinces"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
-    name = Column(String(100), nullable=False)
-    display_name = Column(String(100), nullable=False)
-    code = Column(String(10), nullable=False)
-    is_active = Column(Boolean, nullable=False, server_default=text('1'))
-    created_at = Column(DateTime, nullable=False, server_default=text('GETDATE()'))
-    updated_at = Column(DateTime, nullable=False, server_default=text('GETDATE()'), onupdate=text('GETDATE()'))
-    deleted_at = Column(DateTime, nullable=True)
-    country_id = Column(UNIQUEIDENTIFIER, ForeignKey('countries.id'), nullable=False)
-    name_np = Column(String(100), nullable=True)
-    province_order = Column(Integer, nullable=False)
-    status = Column(BIT, nullable=False, server_default=text('1'))
-    created_by_id = Column(UNIQUEIDENTIFIER, nullable=True)
-    updated_by_id = Column(UNIQUEIDENTIFIER, nullable=True)
-    deleted_by_id = Column(UNIQUEIDENTIFIER, nullable=True)
-    
-    # Relationships
-    country = relationship("Country", backref="provinces")
-    districts = relationship("District", back_populates="province")
-    
-    # ⚠️ ADD THESE INDEXES (matches your database)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    code: Mapped[str] = mapped_column(String(10), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    country_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("countries.id"), nullable=False)
+    name_np: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    province_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    deleted_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    country: Mapped["Country"] = relationship("Country", backref="provinces")
+    districts: Mapped[List["District"]] = relationship("District", back_populates="province")
+
     __table_args__ = (
-        Index('IX_provinces_code', 'code'),
-        Index('IX_provinces_country_id', 'country_id'),
+        Index("IX_provinces_code", "code"),
+        Index("IX_provinces_country_id", "country_id"),
     )

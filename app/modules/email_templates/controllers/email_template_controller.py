@@ -1,6 +1,6 @@
 """EmailTemplate Controller - HTTP endpoint handlers"""
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.database import get_db
@@ -26,14 +26,14 @@ email_template_router = APIRouter()
     summary="List all email templates",
     description="Retrieve paginated list of email templates"
 )
-def list_email_templates(
+async def list_email_templates(
     request: ListRequestFilters = Depends(ListRequestFilters),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List all email templates with pagination and filtering"""
     try:
         service = EmailTemplateService(db)
-        result = service.get_email_templates_paginated(request)
+        result = await service.get_email_templates_paginated(request)
         
         return ApiResponse(
             success=True,
@@ -56,14 +56,14 @@ def list_email_templates(
     summary="Get an email template",
     description="Retrieve a specific email template by ID"
 )
-def get_email_template(
+async def get_email_template(
     template_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get a specific email template"""
     try:
         service = EmailTemplateService(db)
-        template = service.get_email_template_by_id(template_id)
+        template = await service.get_email_template_by_id(template_id)
         
         if not template:
             return ApiResponse(
@@ -92,14 +92,14 @@ def get_email_template(
     summary="Get email template by name",
     description="Retrieve a specific email template by name"
 )
-def get_email_template_by_name(
+async def get_email_template_by_name(
     name: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get an email template by name"""
     try:
         service = EmailTemplateService(db)
-        template = service.get_email_template_by_name(name)
+        template = await service.get_email_template_by_name(name)
         
         if not template:
             return ApiResponse(
@@ -128,14 +128,14 @@ def get_email_template_by_name(
     summary="Create an email template",
     description="Create a new email template"
 )
-def create_email_template(
+async def create_email_template(
     request: EmailTemplateCreateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new email template"""
     try:
         service = EmailTemplateService(db)
-        template = service.create_email_template(request)
+        template = await service.create_email_template(request)
         
         return ApiResponse(
             success=True,
@@ -163,15 +163,15 @@ def create_email_template(
     summary="Update an email template",
     description="Update an existing email template"
 )
-def update_email_template(
+async def update_email_template(
     template_id: UUID,
     request: EmailTemplateUpdateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update an existing email template"""
     try:
         service = EmailTemplateService(db)
-        template = service.update_email_template(template_id, request)
+        template = await service.update_email_template(template_id, request)
         
         return ApiResponse(
             success=True,
@@ -198,15 +198,15 @@ def update_email_template(
     summary="Delete an email template",
     description="Delete an email template (soft delete)"
 )
-def delete_email_template(
+async def delete_email_template(
     template_id: UUID,
     deleted_by: UUID = Depends(lambda: UUID(int=0)),  # Should come from authenticated user
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete an email template"""
     try:
         service = EmailTemplateService(db)
-        service.delete_email_template(template_id, deleted_by)
+        await service.delete_email_template(template_id, deleted_by)
         return None
     except ValueError as e:
         return ApiResponse(

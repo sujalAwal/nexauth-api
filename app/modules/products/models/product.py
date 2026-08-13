@@ -1,72 +1,75 @@
+import uuid
 from datetime import datetime, timezone
-from uuid import UUID
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, Numeric
-from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from decimal import Decimal
+from typing import Optional
+from sqlalchemy import String, Integer, DateTime, Boolean, Numeric
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
-from app.utils.soft_delete import SoftDeleteMixin
+from app.utils.models.mixin.soft_delete import SoftDeleteMixin
 
 
 class Product(Base, SoftDeleteMixin):
     """Product model with inventory, pricing, and merchandising controls."""
-    
+
     __tablename__ = "products"
-    __table_args__ = {"schema": "dbo"}
-    
-    id = Column(UNIQUEIDENTIFIER, primary_key=True, default=lambda: UUID(int=0))
-    
-    # Relationships (UUID references without FK constraints)
-    category_id = Column(String(36), nullable=False)  # Links to categories
-    brand_id = Column(String(36), nullable=True)       # Links to brands (optional)
-    
-    # Core Information
-    title = Column(String(255), nullable=False)
-    name = Column(String(255), nullable=False, unique=True, index=True)  # URL slug
-    sku = Column(String(100), nullable=False, unique=True, index=True)   # Stock Keeping Unit
-    mpn = Column(String(100), nullable=True)  # Manufacturer Part Number
-    short_description = Column(String(500), nullable=True)
-    long_description = Column(String, nullable=True)  # NVARCHAR(MAX)
-    
-    # Pricing & Financials
-    price = Column(Numeric(18, 4), nullable=False, default=0.0)
-    compare_at_price = Column(Numeric(18, 4), nullable=True)  # Original price for discounts
-    cost_price = Column(Numeric(18, 4), nullable=False, default=0.0)  # Internal cost
-    
-    # Inventory Control
-    stock_quantity = Column(Integer, nullable=False, default=0)
-    low_stock_threshold = Column(Integer, nullable=False, default=5)
-    allow_backorders = Column(Boolean, nullable=False, default=False)
-    
-    # Physical Properties
-    weight_kg = Column(Numeric(10, 2), nullable=True)
-    length_cm = Column(Numeric(10, 2), nullable=True)
-    width_cm = Column(Numeric(10, 2), nullable=True)
-    height_cm = Column(Numeric(10, 2), nullable=True)
-    
-    # Media & Merchandising
-    thumbnail_url = Column(String(500), nullable=True)
-    is_featured = Column(Boolean, nullable=False, default=False, index=True)
-    visit_count = Column(Integer, nullable=False, default=0)
-    
-    # Additional Nullable Fields
-    is_discount = Column(Boolean, nullable=True)  # On sale/discount flag
-    warranty = Column(Integer, nullable=True)  # Warranty months
-    display_order = Column(Integer, nullable=True, index=True)  # Sort order
-    meta_title = Column(String(255), nullable=True)  # SEO meta title
-    meta_description = Column(String(500), nullable=True)  # SEO meta description
-    country_of_origin = Column(String(100), nullable=True)  # Country
-    
-    # Status
-    is_active = Column(Boolean, nullable=False, default=True, index=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    deleted_at = Column(DateTime, nullable=True, index=True)
-    
-    # Audit tracking (UUIDs without FK constraints)
-    created_by = Column(String(36), nullable=False)  # UUID as string
-    updated_by = Column(String(36), nullable=False)  # UUID as string
-    deleted_by = Column(String(36), nullable=True)   # UUID as string
-    
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+
+    category_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    brand_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    sku: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    mpn: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    short_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    long_description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0"))
+    compare_at_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 4), nullable=True)
+    cost_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0"))
+
+    stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    allow_backorders: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    weight_kg: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    length_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    width_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+    height_cm: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
+
+    thumbnail_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    visit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    is_discount: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    warranty: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    display_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    meta_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    meta_description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    country_of_origin: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    updated_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    deleted_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+
     def __repr__(self):
         return f"<Product(id={self.id}, name={self.name}, title={self.title}, is_active={self.is_active})>"

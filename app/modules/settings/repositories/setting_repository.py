@@ -1,56 +1,60 @@
 """Setting Repository - Database access layer"""
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from sqlalchemy import select, exists as sa_exists
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from app.modules.settings.models.setting import Setting
 
 
 class SettingRepository:
     """Handles all database operations for settings"""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: AsyncSession):
         self.db = db
-    
-    def get_by_id(self, setting_id: UUID) -> Setting | None:
-        """Retrieve a setting by ID"""
-        return self.db.query(Setting).filter(Setting.id == setting_id).first()
-    
-    def get_by_name(self, name: str) -> Setting | None:
-        """Retrieve a setting by name"""
-        return self.db.query(Setting).filter(Setting.name == name).first()
-    
-    def name_exists(self, name: str) -> bool:
-        """Check if a name already exists"""
-        return self.db.query(Setting).filter(Setting.name == name).exists().scalar()
-    
-    def get_by_group_id(self, group_id: UUID) -> list[Setting]:
-        """Retrieve all settings for a group"""
-        return self.db.query(Setting).filter(Setting.setting_group_id == group_id).all()
-    
-    def get_active_by_group(self, group_id: UUID) -> list[Setting]:
-        """Retrieve active settings for a group"""
-        return self.db.query(Setting).filter(
+
+    async def get_by_id(self, setting_id: UUID) -> Setting | None:
+        result = await self.db.execute(select(Setting).where(Setting.id == setting_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, name: str) -> Setting | None:
+        result = await self.db.execute(select(Setting).where(Setting.name == name))
+        return result.scalar_one_or_none()
+
+    async def name_exists(self, name: str) -> bool:
+        inner = select(Setting.id).where(Setting.name == name)
+        result = await self.db.execute(select(inner.exists()))
+        return result.scalar()
+
+    async def get_by_group_id(self, group_id: UUID) -> list[Setting]:
+        query = select(Setting).where(Setting.setting_group_id == group_id)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def get_active_by_group(self, group_id: UUID) -> list[Setting]:
+        query = select(Setting).where(
             Setting.setting_group_id == group_id,
-            Setting.is_active == True
-        ).all()
-    
-    def create(self, setting: Setting) -> Setting:
-        """Create a new setting"""
+            Setting.is_active == True,
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def create(self, setting: Setting) -> Setting:
         self.db.add(setting)
-        self.db.commit()
-        self.db.refresh(setting)
+        await self.db.commit()
+        await self.db.refresh(setting)
         return setting
-    
-    def update(self, setting: Setting) -> Setting:
-        """Update an existing setting"""
-        self.db.commit()
-        self.db.refresh(setting)
+
+    async def update(self, setting: Setting) -> Setting:
+        self.db.add(setting)
+        await self.db.commit()
+        await self.db.refresh(setting)
         return setting
-    
-    def delete(self, setting_id: UUID) -> bool:
-        """Soft delete a setting"""
-        setting = self.get_by_id(setting_id)
+
+    async def delete(self, setting_id: UUID) -> bool:
+        setting = await self.get_by_id(setting_id)
         if setting:
             setting.deleted_at = datetime.now(timezone.utc)
-            self.db.commit()
+            self.db.add(setting)
+            await self.db.commit()
             return True
         return False

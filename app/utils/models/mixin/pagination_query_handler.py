@@ -1,7 +1,11 @@
 from pprint import pprint
+from sqlalchemy import func, select 
 
-from app.schemas.pagination_response import PaginationResponse
+from app.schemas.pagination_response import PaginatedCollectionResponse, PaginationResponse
 class PaginationQueryHandler:
+
+    def __init__(self, db):  
+        self.db = db   
     """
     Handles database queries with pagination, filtering, and sorting.
     Applies all filters at DATABASE level, not in-memory.
@@ -16,28 +20,26 @@ class PaginationQueryHandler:
                     search_filter = field.ilike(f"%{search_query}%")
                 else:
                     search_filter = search_filter | field.ilike(f"%{search_query}%")
-            query = query.filter(search_filter)
+            query = query.where(search_filter)
         return query
 
-    def apply_sorting(self, query, order_by, sort_order, sortable_fields):
-        """Apply sorting to SQLAlchemy query"""
-        pprint(query.__dict__)
-        if order_by in sortable_fields:
-            model = query.column_descriptions[0]['entity']
-            order_field = getattr(model, order_by)
-            if sort_order == "asc":
-                query = query.order_by(order_field.asc())
-            else:
-                query = query.order_by(order_field.desc())
+    def apply_sorting(self, query, model, order_by, sort_order, sortable_fields):
+        order_field = getattr(model, order_by)
+        if sort_order == "asc":
+            query = query.order_by(order_field.asc())
+        else:
+            query = query.order_by(order_field.desc())
         return query
 
     def apply_pagination(self, query, skip, limit):
         """Apply pagination to SQLAlchemy query"""
         return query.offset(skip).limit(limit)
 
-    def get_count_before_pagination(self, query):
+    async def get_count_before_pagination(self, query):
         """Get total count BEFORE pagination"""
-        return query.count()
+        count_statement = select(func.count()).select_from(query.subquery())
+        result = await self.db.execute(count_statement)
+        return result.scalar()
 
     def build_pagination_metadata(self, total, skip, limit) -> PaginationResponse:
         """Calculate pagination metadata"""
@@ -52,7 +54,7 @@ class PaginationQueryHandler:
             total_pages=(total + limit - 1) // limit  # Ceiling division
         )
 
-    def execute_paginated_query(self, query, params, searchable_fields, sortable_fields):
+    async def execute_paginated_query(self, query, model, params, searchable_fields, sortable_fields)-> PaginatedCollectionResponse:
         """
         Execute complete paginated query with filters and sorting.
         
@@ -66,26 +68,27 @@ class PaginationQueryHandler:
         """
         # Apply search filter
         query = self.filter_by_search(query, params.search, searchable_fields)
+
+        # Apply status filter
+        if params.status is not None:
+            query = query.where(model.is_active == params.status)
         
         # Get total BEFORE pagination
-        total = self.get_count_before_pagination(query)
+        total = await self.get_count_before_pagination(query)
         
         # Apply sorting
-        query = self.apply_sorting(query, params.order_by, params.sort_order, sortable_fields)
+        query = self.apply_sorting(query,model, params.order_by, params.sort_order, sortable_fields)
         
         # Apply pagination
         query = self.apply_pagination(query, params.skip, params.limit)
         
         # Execute query and fetch results
-        items = query.all()
-        
+        results = await self.db.execute(query)
+        items = results.scalars().all()
         # Build metadata
         pagination = self.build_pagination_metadata(total, params.skip, params.limit)
         
-        return {
-            "data": items,
-            "pagination": pagination
-        }
+        return PaginatedCollectionResponse(data=items, pagination=pagination)
 
 
 # ============================================================================

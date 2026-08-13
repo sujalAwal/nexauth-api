@@ -1,6 +1,7 @@
 """EmailTemplate Service - Business logic layer"""
 from uuid import UUID
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.email_templates.models.email_template import EmailTemplate
 from app.modules.email_templates.schemas.requests.email_template_request import (
     EmailTemplateCreateRequest,
@@ -14,18 +15,16 @@ from app.utils.models.mixin.pagination_query_handler import PaginationQueryHandl
 
 class EmailTemplateService:
     """Handles business logic for email template operations"""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = EmailTemplateRepository(db)
-        self.query_handler = PaginationQueryHandler()
-    
-    def create_email_template(self, request: EmailTemplateCreateRequest) -> EmailTemplateResponse:
-        """Create a new email template"""
-        # Validate unique name
-        if self.repo.name_exists(request.name):
+        self.query_handler = PaginationQueryHandler(db)
+
+    async def create_email_template(self, request: EmailTemplateCreateRequest) -> EmailTemplateResponse:
+        if await self.repo.name_exists(request.name):
             raise ValueError(f"Email template name '{request.name}' already exists")
-        
+
         new_template = EmailTemplate(
             title=request.title,
             name=request.name,
@@ -39,34 +38,30 @@ class EmailTemplateService:
             created_by=request.created_by,
             updated_by=request.created_by,
         )
-        
-        created_template = self.repo.create(new_template)
+
+        created_template = await self.repo.create(new_template)
         return EmailTemplateResponse.model_validate(created_template)
-    
-    def get_email_template_by_id(self, template_id: UUID) -> EmailTemplateResponse | None:
-        """Retrieve an email template by ID"""
-        template = self.repo.get_by_id(template_id)
+
+    async def get_email_template_by_id(self, template_id: UUID) -> EmailTemplateResponse | None:
+        template = await self.repo.get_by_id(template_id)
         if template:
             return EmailTemplateResponse.model_validate(template)
         return None
-    
-    def get_email_template_by_name(self, name: str) -> EmailTemplateResponse | None:
-        """Retrieve an email template by name"""
-        template = self.repo.get_by_name(name)
+
+    async def get_email_template_by_name(self, name: str) -> EmailTemplateResponse | None:
+        template = await self.repo.get_by_name(name)
         if template:
             return EmailTemplateResponse.model_validate(template)
         return None
-    
-    def update_email_template(self, template_id: UUID, request: EmailTemplateUpdateRequest) -> EmailTemplateResponse:
-        """Update an existing email template"""
-        template = self.repo.get_by_id(template_id)
+
+    async def update_email_template(self, template_id: UUID, request: EmailTemplateUpdateRequest) -> EmailTemplateResponse:
+        template = await self.repo.get_by_id(template_id)
         if not template:
             raise ValueError(f"Email template not found with ID: {template_id}")
-        
-        # Check if new name is unique
-        if request.name != template.name and self.repo.name_exists(request.name):
+
+        if request.name != template.name and await self.repo.name_exists(request.name):
             raise ValueError(f"Email template name '{request.name}' already exists")
-        
+
         template.title = request.title
         template.name = request.name
         template.subject = request.subject
@@ -78,30 +73,24 @@ class EmailTemplateService:
         if request.is_active is not None:
             template.is_active = request.is_active
         template.updated_by = request.updated_by
-        
-        updated_template = self.repo.update(template)
+
+        updated_template = await self.repo.update(template)
         return EmailTemplateResponse.model_validate(updated_template)
-    
-    def delete_email_template(self, template_id: UUID, deleted_by: UUID) -> bool:
-        """Delete (soft delete) an email template"""
-        if not self.repo.delete(template_id, deleted_by):
+
+    async def delete_email_template(self, template_id: UUID, deleted_by: UUID) -> bool:
+        if not await self.repo.delete(template_id, deleted_by):
             raise ValueError(f"Email template not found with ID: {template_id}")
         return True
-    
-    def get_email_templates_paginated(self, params: ListRequestFilters) -> dict:
-        """Get paginated list of email templates"""
-        query = self.db.query(EmailTemplate)
-        
-        result = self.query_handler.execute_paginated_query(
-            query=query,
+
+    async def get_email_templates_paginated(self, params: ListRequestFilters) -> dict:
+        result = await self.query_handler.execute_paginated_query(
+            query=select(EmailTemplate),
+            model=EmailTemplate,
             params=params,
             searchable_fields=[EmailTemplate.title, EmailTemplate.name],
-            sortable_fields=["created_at", "updated_at", "name"]
+            sortable_fields=["created_at", "updated_at", "name"],
         )
-        
-        templates = [EmailTemplateResponse.model_validate(template) for template in result["data"]]
-        
-        return {
-            "data": templates,
-            "pagination": result["pagination"]
-        }
+
+        templates = [EmailTemplateResponse.model_validate(template) for template in result.data]
+
+        return {"data": templates, "pagination": result.pagination}

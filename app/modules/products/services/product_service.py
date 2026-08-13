@@ -1,123 +1,113 @@
-from sqlalchemy.orm import Session
+from types import SimpleNamespace
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from app.modules.products.repositories.product_repository import ProductRepository
 from app.modules.products.schemas.requests.product_request import ProductCreateRequest, ProductUpdateRequest
 from app.utils.models.mixin.pagination_query_handler import PaginationQueryHandler
 from app.modules.products.models.product import Product
-from datetime import datetime, timezone
 
 
 class ProductService:
     """Service for product business logic."""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = ProductRepository(db)
-    
-    def create_product(self, product_request: ProductCreateRequest, created_by: str) -> Product:
-        """Create a new product with validation."""
-        # Validate unique name (slug)
-        if self.repo.name_exists(product_request.name):
+        self.query_handler = PaginationQueryHandler(db)
+
+    async def create_product(self, product_request: ProductCreateRequest, created_by: UUID) -> Product:
+        if await self.repo.name_exists(product_request.name):
             raise ValueError(f"Product with name '{product_request.name}' already exists")
-        
-        # Validate unique SKU
-        if self.repo.sku_exists(product_request.sku):
+
+        if await self.repo.sku_exists(product_request.sku):
             raise ValueError(f"Product with SKU '{product_request.sku}' already exists")
-        
+
         product_data = product_request.model_dump()
         product_data["created_by"] = created_by
         product_data["updated_by"] = created_by
-        # Convert UUID to string for storage
-        product_data["category_id"] = str(product_request.category_id)
-        if product_request.brand_id:
-            product_data["brand_id"] = str(product_request.brand_id)
-        
-        return self.repo.create(product_data)
-    
-    def get_product_by_id(self, product_id: UUID) -> Product | None:
-        """Get a product by ID and increment visit count."""
-        product = self.repo.get_by_id(product_id)
+
+        return await self.repo.create(product_data)
+
+    async def get_product_by_id(self, product_id: UUID) -> Product | None:
+        product = await self.repo.get_by_id(product_id)
         if product:
-            self.repo.increment_visit_count(product_id)
+            await self.repo.increment_visit_count(product_id)
         return product
-    
-    def get_product_by_name(self, name: str) -> Product | None:
-        """Get a product by name (URL slug)."""
-        return self.repo.get_by_name(name)
-    
-    def get_product_by_sku(self, sku: str) -> Product | None:
-        """Get a product by SKU."""
-        return self.repo.get_by_sku(sku)
-    
-    def get_products_by_category(self, category_id: UUID) -> list[Product]:
-        """Get all products in a category."""
-        return self.repo.get_by_category(str(category_id))
-    
-    def get_products_by_brand(self, brand_id: UUID) -> list[Product]:
-        """Get all products by brand."""
-        return self.repo.get_by_brand(str(brand_id))
-    
-    def get_featured_products(self) -> list[Product]:
-        """Get all featured active products."""
-        return self.repo.get_featured()
-    
-    def get_products_on_sale(self) -> list[Product]:
-        """Get all products on sale/discount."""
-        return self.repo.get_on_sale()
-    
-    def get_low_stock_products(self) -> list[Product]:
-        """Get all products with low stock."""
-        return self.repo.get_low_stock()
-    
-    def update_product(self, product_id: UUID, product_request: ProductUpdateRequest, updated_by: str) -> Product:
-        """Update an existing product with validation."""
-        product = self.repo.get_by_id(product_id)
+
+    async def get_product_by_name(self, name: str) -> Product | None:
+        return await self.repo.get_by_name(name)
+
+    async def get_product_by_sku(self, sku: str) -> Product | None:
+        return await self.repo.get_by_sku(sku)
+
+    async def get_products_by_category(self, category_id: UUID) -> list[Product]:
+        return await self.repo.get_by_category(category_id)
+
+    async def get_products_by_brand(self, brand_id: UUID) -> list[Product]:
+        return await self.repo.get_by_brand(brand_id)
+
+    async def get_featured_products(self) -> list[Product]:
+        return await self.repo.get_featured()
+
+    async def get_products_on_sale(self) -> list[Product]:
+        return await self.repo.get_on_sale()
+
+    async def get_low_stock_products(self) -> list[Product]:
+        return await self.repo.get_low_stock()
+
+    async def update_product(self, product_id: UUID, product_request: ProductUpdateRequest, updated_by: UUID) -> Product:
+        product = await self.repo.get_by_id(product_id)
         if not product:
             raise ValueError(f"Product with ID '{product_id}' not found")
-        
-        # Validate unique name if changing it
+
         if product_request.name and product_request.name != product.name:
-            if self.repo.name_exists(product_request.name, exclude_id=product_id):
+            if await self.repo.name_exists(product_request.name, exclude_id=product_id):
                 raise ValueError(f"Product with name '{product_request.name}' already exists")
-        
-        # Validate unique SKU if changing it
+
         if product_request.sku and product_request.sku != product.sku:
-            if self.repo.sku_exists(product_request.sku, exclude_id=product_id):
+            if await self.repo.sku_exists(product_request.sku, exclude_id=product_id):
                 raise ValueError(f"Product with SKU '{product_request.sku}' already exists")
-        
+
         product_data = product_request.model_dump(exclude_unset=True)
         product_data["updated_by"] = updated_by
-        product_data["updated_at"] = datetime.now(timezone.utc)
-        
-        # Convert UUIDs to strings if provided
-        if product_request.category_id:
-            product_data["category_id"] = str(product_request.category_id)
-        if product_request.brand_id:
-            product_data["brand_id"] = str(product_request.brand_id)
-        
-        return self.repo.update(product_id, product_data)
-    
-    def delete_product(self, product_id: UUID, deleted_by: str) -> Product:
-        """Soft delete a product."""
-        product = self.repo.get_by_id(product_id)
+
+        updated = await self.repo.update(product_id, product_data)
+        return updated
+
+    async def delete_product(self, product_id: UUID, deleted_by: UUID) -> Product:
+        product = await self.repo.get_by_id(product_id)
         if not product:
             raise ValueError(f"Product with ID '{product_id}' not found")
-        
-        return self.repo.delete(product_id, deleted_by)
-    
-    def get_products_paginated(self, search: str = None, sort: str = None, 
-                              page: int = 1, limit: int = 10) -> dict:
-        """Get products with pagination and filtering."""
-        query = self.db.query(Product)
-        
-        handler = PaginationQueryHandler(
-            query=query,
-            model=Product,
-            searchable_fields=[Product.name, Product.title, Product.sku, Product.mpn],
+
+        return await self.repo.delete(product_id, deleted_by)
+
+    async def get_products_paginated(self, search: str = None, sort: str = None,
+                                     page: int = 1, limit: int = 10) -> dict:
+        order_by = "updated_at"
+        sort_order = "desc"
+        if sort:
+            if sort.startswith("-"):
+                order_by = sort[1:]
+                sort_order = "desc"
+            else:
+                order_by = sort
+                sort_order = "asc"
+
+        params = SimpleNamespace(
+            skip=max(0, (page - 1) * limit),
+            limit=limit,
             search=search,
-            sort=sort,
-            page=page,
-            limit=limit
+            order_by=order_by,
+            sort_order=sort_order,
         )
-        
-        return handler.get_paginated_response()
+
+        result = await self.query_handler.execute_paginated_query(
+            query=select(Product),
+            model=Product,
+            params=params,
+            searchable_fields=[Product.name, Product.title, Product.sku, Product.mpn],
+            sortable_fields=["created_at", "updated_at", "name", "price", "display_order"],
+        )
+
+        return {"data": result.data, "pagination": result.pagination}

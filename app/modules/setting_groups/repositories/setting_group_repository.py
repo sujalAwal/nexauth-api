@@ -1,50 +1,52 @@
 """SettingGroup Repository - Database access layer"""
-from sqlalchemy import exists
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
+from sqlalchemy import select, exists as sa_exists
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from app.modules.setting_groups.models.setting_group import SettingGroup
 
 
 class SettingGroupRepository:
     """Handles all database operations for setting groups"""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: AsyncSession):
         self.db = db
-    
-    def get_by_id(self, group_id: UUID) -> SettingGroup | None:
-        """Retrieve a setting group by ID"""
-        return self.db.query(SettingGroup).filter(SettingGroup.id == group_id).first()
-    
-    def get_by_name(self, name: str) -> SettingGroup | None:
-        """Retrieve a setting group by name"""
-        return self.db.query(SettingGroup).filter(SettingGroup.name == name).first()
-    
-    def name_exists(self, name: str) -> bool:
-        return self.db.query(SettingGroup.name).where(SettingGroup.name == name).first() is not None
-    
-    def get_all_active(self) -> list[SettingGroup]:
-        """Retrieve all active setting groups"""
-        return self.db.query(SettingGroup).filter(SettingGroup.is_active == True).all()
-    
-    def create(self, group: SettingGroup) -> SettingGroup:
-        """Create a new setting group"""
+
+    async def get_by_id(self, group_id: UUID) -> SettingGroup | None:
+        result = await self.db.execute(select(SettingGroup).where(SettingGroup.id == group_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, name: str) -> SettingGroup | None:
+        result = await self.db.execute(select(SettingGroup).where(SettingGroup.name == name))
+        return result.scalar_one_or_none()
+
+    async def name_exists(self, name: str) -> bool:
+        inner = select(SettingGroup.id).where(SettingGroup.name == name)
+        result = await self.db.execute(select(inner.exists()))
+        return result.scalar()
+
+    async def get_all_active(self) -> list[SettingGroup]:
+        query = select(SettingGroup).where(SettingGroup.is_active == True)
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def create(self, group: SettingGroup) -> SettingGroup:
         self.db.add(group)
-        self.db.commit()
-        self.db.refresh(group)
+        await self.db.commit()
+        await self.db.refresh(group)
         return group
-    
-    def update(self, group: SettingGroup) -> SettingGroup:
-        """Update an existing setting group"""
-        self.db.commit()
-        self.db.refresh(group)
+
+    async def update(self, group: SettingGroup) -> SettingGroup:
+        self.db.add(group)
+        await self.db.commit()
+        await self.db.refresh(group)
         return group
-    
-    def delete(self, group_id: UUID) -> bool:
-        """Soft delete a setting group"""
-        group = self.get_by_id(group_id)
+
+    async def delete(self, group_id: UUID) -> bool:
+        group = await self.get_by_id(group_id)
         if group:
             group.deleted_at = datetime.now(timezone.utc)
-            self.db.commit()
+            self.db.add(group)
+            await self.db.commit()
             return True
         return False

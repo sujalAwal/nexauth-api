@@ -13,9 +13,11 @@ class ListRequestFilters:
         search: Optional[str] = Query(None),
         order_by: str = Query("updated_at"),
         sort_order: str = Query("desc"),
+        status: Optional[bool] = Query(None),
     ):
         self.skip = skip
         self.limit = limit
         self.search = search
         self.order_by = order_by
         self.sort_order = sort_order
+        self.status = status

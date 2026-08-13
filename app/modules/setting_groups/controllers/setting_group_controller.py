@@ -1,8 +1,7 @@
 """SettingGroup Controller - HTTP endpoint handlers"""
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-import json
 
 from app.database import get_db
 from app.modules.setting_groups.schemas.requests.setting_group_request import (
@@ -27,14 +26,14 @@ setting_group_router = APIRouter()
     summary="List all setting groups",
     description="Retrieve paginated list of setting groups"
 )
-def list_setting_groups(
+async def list_setting_groups(
     request: ListRequestFilters = Depends(ListRequestFilters),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """List all setting groups with pagination and filtering"""
     try:
         service = SettingGroupService(db)
-        result = service.get_setting_groups_paginated(request)
+        result = await service.get_setting_groups_paginated(request)
         
         return ApiResponse(
             success=True,
@@ -57,14 +56,14 @@ def list_setting_groups(
     summary="Get a setting group",
     description="Retrieve a specific setting group by ID"
 )
-def get_setting_group(
+async def get_setting_group(
     group_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Get a specific setting group"""
     try:
         service = SettingGroupService(db)
-        group = service.get_setting_group_by_id(group_id)
+        group = await service.get_setting_group_by_id(group_id)
         
         if not group:
             return ApiResponse(
@@ -93,14 +92,14 @@ def get_setting_group(
     summary="Create a setting group",
     description="Create a new setting group"
 )
-def create_setting_group(
+async def create_setting_group(
     request: SettingGroupCreateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new setting group"""
     try:
         service = SettingGroupService(db)
-        group = service.create_setting_group(request)
+        group = await service.create_setting_group(request)
         
         return ApiResponse(
             success=True,
@@ -128,15 +127,15 @@ def create_setting_group(
     summary="Update a setting group",
     description="Update an existing setting group"
 )
-def update_setting_group(
+async def update_setting_group(
     group_id: UUID,
     request: SettingGroupUpdateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update an existing setting group"""
     try:
         service = SettingGroupService(db)
-        group = service.update_setting_group(group_id, request)
+        group = await service.update_setting_group(group_id, request)
         
         return ApiResponse(
             success=True,
@@ -163,14 +162,14 @@ def update_setting_group(
     summary="Delete a setting group",
     description="Delete a setting group (soft delete)"
 )
-def delete_setting_group(
+async def delete_setting_group(
     group_id: UUID,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete a setting group"""
     try:
         service = SettingGroupService(db)
-        service.delete_setting_group(group_id)
+        await service.delete_setting_group(group_id)
         return None
     except ValueError as e:
         return ApiResponse(

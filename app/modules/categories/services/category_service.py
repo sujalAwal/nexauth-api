@@ -1,81 +1,88 @@
-from sqlalchemy.orm import Session
+from types import SimpleNamespace
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from app.modules.categories.repositories.category_repository import CategoryRepository
 from app.modules.categories.schemas.requests.category_request import CategoryCreateRequest, CategoryUpdateRequest
 from app.utils.models.mixin.pagination_query_handler import PaginationQueryHandler
 from app.modules.categories.models.category import Category
-from datetime import datetime, timezone
 
 
 class CategoryService:
     """Service for category business logic."""
-    
-    def __init__(self, db: Session):
+
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.repo = CategoryRepository(db)
-    
-    def create_category(self, category_request: CategoryCreateRequest, created_by: str) -> Category:
-        """Create a new category with validation."""
-        # Validate unique name
-        if self.repo.name_exists(category_request.name):
+        self.query_handler = PaginationQueryHandler(db)
+
+    async def create_category(self, category_request: CategoryCreateRequest, created_by: UUID) -> Category:
+        if await self.repo.name_exists(category_request.name):
             raise ValueError(f"Category with name '{category_request.name}' already exists")
-        
+
         category_data = category_request.model_dump()
         category_data["created_by"] = created_by
         category_data["updated_by"] = created_by
-        
-        return self.repo.create(category_data)
-    
-    def get_category_by_id(self, category_id: UUID) -> Category | None:
-        """Get a category by ID."""
-        return self.repo.get_by_id(category_id)
-    
-    def get_category_by_name(self, name: str) -> Category | None:
-        """Get a category by name (URL slug)."""
-        return self.repo.get_by_name(name)
-    
-    def get_featured_categories(self) -> list[Category]:
-        """Get all featured active categories ordered by display_order."""
-        return self.repo.get_featured()
-    
-    def update_category(self, category_id: UUID, category_request: CategoryUpdateRequest, updated_by: str) -> Category:
-        """Update an existing category with validation."""
-        category = self.repo.get_by_id(category_id)
+
+        return await self.repo.create(category_data)
+
+    async def get_category_by_id(self, category_id: UUID) -> Category | None:
+        return await self.repo.get_by_id(category_id)
+
+    async def get_category_by_name(self, name: str) -> Category | None:
+        return await self.repo.get_by_name(name)
+
+    async def get_featured_categories(self) -> list[Category]:
+        return await self.repo.get_featured()
+
+    async def update_category(self, category_id: UUID, category_request: CategoryUpdateRequest, updated_by: UUID) -> Category:
+        category = await self.repo.get_by_id(category_id)
         if not category:
             raise ValueError(f"Category with ID '{category_id}' not found")
-        
-        # Validate unique name if changing it
+
         if category_request.name and category_request.name != category.name:
-            if self.repo.name_exists(category_request.name, exclude_id=category_id):
+            if await self.repo.name_exists(category_request.name, exclude_id=category_id):
                 raise ValueError(f"Category with name '{category_request.name}' already exists")
-        
+
         category_data = category_request.model_dump(exclude_unset=True)
         category_data["updated_by"] = updated_by
-        category_data["updated_at"] = datetime.now(timezone.utc)
-        
-        return self.repo.update(category_id, category_data)
-    
-    def delete_category(self, category_id: UUID, deleted_by: str) -> Category:
-        """Soft delete a category."""
-        category = self.repo.get_by_id(category_id)
+
+        updated = await self.repo.update(category_id, category_data)
+        return updated
+
+    async def delete_category(self, category_id: UUID, deleted_by: UUID) -> Category:
+        category = await self.repo.get_by_id(category_id)
         if not category:
             raise ValueError(f"Category with ID '{category_id}' not found")
-        
-        return self.repo.delete(category_id, deleted_by)
-    
-    def get_categories_paginated(self, search: str = None, sort: str = None, 
-                                page: int = 1, limit: int = 10) -> dict:
-        """Get categories with pagination and filtering."""
-        query = self.db.query(Category)
-        
-        handler = PaginationQueryHandler(
-            query=query,
-            model=Category,
-            searchable_fields=[Category.name, Category.title, Category.description],
+
+        return await self.repo.delete(category_id, deleted_by)
+
+    async def get_categories_paginated(self, search: str = None, sort: str = None,
+                                       page: int = 1, limit: int = 10) -> dict:
+        order_by = "updated_at"
+        sort_order = "desc"
+        if sort:
+            if sort.startswith("-"):
+                order_by = sort[1:]
+                sort_order = "desc"
+            else:
+                order_by = sort
+                sort_order = "asc"
+
+        params = SimpleNamespace(
+            skip=max(0, (page - 1) * limit),
+            limit=limit,
             search=search,
-            sort=sort,
-            page=page,
-            limit=limit
+            order_by=order_by,
+            sort_order=sort_order,
         )
-        
-        return handler.get_paginated_response()
+
+        result = await self.query_handler.execute_paginated_query(
+            query=select(Category),
+            model=Category,
+            params=params,
+            searchable_fields=[Category.name, Category.title, Category.description],
+            sortable_fields=["created_at", "updated_at", "name", "display_order"],
+        )
+
+        return {"data": result.data, "pagination": result.pagination}
